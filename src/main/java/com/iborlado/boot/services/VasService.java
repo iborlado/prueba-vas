@@ -24,6 +24,7 @@ import com.iborlado.boot.dto.MessageType;
 import com.iborlado.boot.dto.Metrics;
 import com.iborlado.boot.dto.Msg;
 import com.iborlado.boot.utils.Util;
+import com.iborlado.boot.utils.UtilBusiness;
 
 @Service
 public class VasService implements IVasService{
@@ -37,22 +38,38 @@ public class VasService implements IVasService{
 	@Autowired
 	Kpis kpis;
 	
+	//CTES, pasar a properties
+	private static final String RESOURCE_URL = "https://raw.githubusercontent.com/vas-test/test1/master/logs/MCP_";
+	private static final String PREFIX_FILE = "MCP_";
+	private static final String SUFFIX_FILE = ".json";
+	private static final String NUMBER_ROWS = "nRows";
+	private static final String NUMBER_CALLS = "nCalls";
+	private static final String NUMBER_MSGS = "nMsgs";
+	private static final String DIFFERENT_ORIGINS = "differentOrigin";
+	private static final String DIFFERENT_DESTINATIONS = "differentDestination";
+	private static final String PROCESS_DURATION = "durationProcess";
+	private static final String CALL = "CALL";
+	private static final String CALL_OK = "OK";
+	private static final String CALL_KO = "KO";
+	private static final String MSG = "MSG";
+	private static final String MSG_DELIVERED = "DELIVERED";
+	private static final String MSG_SEEN = "SEEN";
+	private static final String[] RANKING_WORDS = {"ARE", "YOU", "FINE", "HELLO", "NOT"};
+	
+	//METRICS
 	private int contadorMissingField;
 	private int contadorLLamadasConError;
-	private int contadorLlamadas;
 	private int contadorLlamadasOK;
 	private int contadorLlamadasKO;
-
 	private int contadorMensajesConError;
 	private int contadorMensajes;
 	private int contadorMensajesSinContenido;
-	
 	private Map<String,Integer> resultWordRanking;
-	private List<String> rankingWords;
+	private int counterWrongLines;
 	
 	//KPIS
-	private Map<String,Long> ficherosProcesados;
-	private Map<String, Map<String,Long>> complexMap;
+	private Map<String, Long> ficherosProcesados;
+	private Map<String, Map<String,Long>> auxKpisMap;
 	private long nRows;
 	private long nCalls;
 	private long nMsgs;
@@ -63,31 +80,29 @@ public class VasService implements IVasService{
 	
 	@Override
 	public String getJsonFromFile(String date) {
-		int numLineasErroneas = 0;
+		int nWrongLines = 0;
 		
 		//obtenemos un string con el fichero
 		String contentFile = getContentFileFromUrl(date);
 		//obtenemos cada línea del fichero
-		String[] jsonList = contentFile.split("\n");
+		String[] jsonList = UtilBusiness.formatLines(contentFile);
 		
 		String response = "[";
-		for (int i=0;i<jsonList.length;i++){
+		for (String jsonLine : jsonList){
 			try{
-				String linea = jsonList[i];
-				System.out.print(linea);
-				boolean valida = Util.isJSONValid(linea);
-				if (valida){
-					response+=linea+",";
+				System.out.print(jsonLine);
+				boolean validLine = Util.isJSONValid(jsonLine);
+				if (validLine){
+					response+=jsonLine+",";
 				}
 				else{
-					numLineasErroneas++;
+					nWrongLines++;
 				}
 			}catch (Exception e) {
-				System.out.println("Error en elemento " +i +"------" +e.toString());
-				numLineasErroneas++;
+				nWrongLines++;
 			}
 		}
-		if (numLineasErroneas>0){
+		if (nWrongLines>0){
 			response=null;
 		}
 		else{
@@ -97,18 +112,46 @@ public class VasService implements IVasService{
 		return response;
 	}
 	
-
+	
+	@Override
 	public Metrics calculateMetrics(String date) {
-		int numLineasErroneas = 0;
+		processFile(date);
+		fillMetricValues();
+		
+		return metrics;
+	}
+	
+	
+	@Override
+	public Kpis calculateKpis(String dates){
+		inicializarpkis();
+		String [] fileNames = UtilBusiness.extractFileNames(dates);
+		//repeat to all files
+		for (String name: fileNames){
+			Long inicioProceso = new Date().getTime();
+			processFile(name);
+			//obtener duracion del proceso
+			durationProcess = UtilBusiness.calcularTimeofProcces(inicioProceso, name);
+			ficherosProcesados.put(PREFIX_FILE+name+SUFFIX_FILE, durationProcess);
+			//guardar valores a asignar mas tarde al objeto kpis
+			auxKpisMap = addKpisToMap(auxKpisMap, name, nRows, nCalls, nMsgs, differentOrigin, differentDestination, durationProcess);
+		}
+		//calcular totales y devolver objeto kpis
+		fillKpiValues(auxKpisMap);
+		return kpis;
+	}
+	
+
+	private String processFile(String date){
+		int wrongLines = 0;
 		inicializarContadores();
 		inicializarAuxKpis();
 		establecerRankingWords();
 		
-	
 		//obtenemos un string con el fichero
 		String contentFile = getContentFileFromUrl(date);
 		//obtenemos cada línea del fichero
-		String[] lista = formatLines(contentFile);
+		String[] lista = UtilBusiness.formatLines(contentFile);
 		
 		String response = "";
 		nRows = lista.length;
@@ -118,45 +161,47 @@ public class VasService implements IVasService{
 				boolean valida = Util.isJSONValid(linea);
 				if (valida){
 					response+=linea+",";
-					String tipoMensaje = tipodeMensaje(linea);
+					String tipoMensaje = UtilBusiness.tipodeMensaje(linea);
 					System.out.println("tipo de mensaje = "	+ tipoMensaje);
 					if (tipoMensaje != null){
-						boolean todoscamposgenericos = comprobarGenerico(linea);
-						if (tipoMensaje.equals("CALL")){
+						boolean todoscamposgenericos = checkGenericFields(linea);
+						if (tipoMensaje.equals(CALL)){
 							nCalls++;
-							comprobarTipoLlamada(linea, todoscamposgenericos);
+							checkCallFields(linea, todoscamposgenericos);
 						}
-						else if (tipoMensaje.equals("MSG")){
+						else if (tipoMensaje.equals(MSG)){
 							nMsgs++;
-							comprobarTipoMensaje(linea, todoscamposgenericos);
+							checkMsgFields(linea, todoscamposgenericos);
 						}
 					}
-
 				}
 				else{
-					numLineasErroneas++;
+					wrongLines++;
 				}
 			}catch (Exception e) {
 				System.out.println("Error en elemento " +linea +"------" +e.toString());
-				numLineasErroneas++;
+				wrongLines++;
 			}
-			
 		}
-		if (numLineasErroneas>0){
+		if (wrongLines>0){
 			response=null;
 		}
 		else{
 			response = response.substring(0, response.length()-1);
 		}
-		
+		counterWrongLines = wrongLines;
+		return response;
+	}
+	
+	private void fillMetricValues(){
 		metrics.setnRowsMissingFields(contadorMissingField);
 		metrics.setnMessagesBlankContent(contadorMensajesSinContenido);
-		metrics.setnRowsFieldsErrors(contadorLLamadasConError+contadorMensajesConError+numLineasErroneas);
+		metrics.setnRowsFieldsErrors(contadorLLamadasConError+contadorMensajesConError+counterWrongLines);
 		metrics.setnCallsByCountry(null);
 		
 		Map<String,Integer> relationship = new HashMap<>();
-		relationship.put("OK", contadorLlamadasOK);
-		relationship.put("KO", contadorLlamadasKO);
+		relationship.put(CALL_OK, contadorLlamadasOK);
+		relationship.put(CALL_KO, contadorLlamadasKO);
 		metrics.setRelationshipOkKoCalls(relationship);
 		
 		metrics.setAverageCallByCountry(null);
@@ -171,58 +216,21 @@ public class VasService implements IVasService{
 		System.out.println("contadorMensajes"+contadorMensajes);
 		System.out.println("contadorMensajesConError = "+contadorMensajesConError);
 		System.out.println("contadorMensajesSinContenido = "+contadorMensajesSinContenido);
-//		System.out.println(""+);
-		System.out.println(metrics.getRelationshipOkKoCalls().get("OK")+"OK / "+metrics.getRelationshipOkKoCalls().get("KO")+"KO");
-
-
-		return metrics;
-		
+		System.out.println(metrics.getRelationshipOkKoCalls().get(CALL_OK)+ CALL_OK +" / "+metrics.getRelationshipOkKoCalls().get(CALL_KO)+CALL_KO);
 	}
 	
 	
-	public Kpis calculateKpis(String dates){
-		System.out.println(dates);
-		inicializarpkis();
-		String [] fileNames = extractFileNames(dates);
-		//repeat to all files
-		for (String name: fileNames){
-			Long inicioProceso = new Date().getTime();
-
-		calculateMetrics(name);
-		//obtener duracion del proceso
-		
-		durationProcess = calcularTimeofProcces(inicioProceso, name);
-		
-		
-		complexMap = fillComplexMap(complexMap, name, nRows, nCalls, nMsgs, differentOrigin, differentDestination, durationProcess);
-		}
-		
-		//calcular totales y devolver objeto kpis
-		fillKpis(complexMap);
-		return kpis;
-	}
-	
-	private Long calcularTimeofProcces (Long inicioProceso, String fichero){
-		Long duration = 0l;
-		Long finProceso = new Date().getTime();
-		duration = finProceso-inicioProceso;
-		System.out.println("Proceso "+fichero+ "--> "+ duration +" ms");
-
-		ficherosProcesados.put("MCP_"+fichero+".json", duration);
-		return duration;
-	}
-	
-	private void fillKpis(Map<String, Map<String,Long>> complexMap){
-		System.out.println("Ficheros procesados = "+complexMap.size());
+	private void fillKpiValues(Map<String, Map<String,Long>> kpisTotalMap){
+		System.out.println("Ficheros procesados = "+kpisTotalMap.size());
 		inicializarAuxKpis();
-		for(Map<String, Long> mapita: complexMap.values()){
-		  nRows += 	mapita.get("nRows");
-		  nCalls += mapita.get("nCalls");
-		  nMsgs += mapita.get("nMsgs");
-		  differentOrigin += mapita.get("differentOrigin");
-		  differentDestination += mapita.get("differentDestination");
+		for(Map<String, Long> kpisFileMap: kpisTotalMap.values()){
+		  nRows += 	kpisFileMap.get(NUMBER_ROWS);
+		  nCalls += kpisFileMap.get(NUMBER_CALLS);
+		  nMsgs += kpisFileMap.get(NUMBER_MSGS);
+		  differentOrigin += kpisFileMap.get(DIFFERENT_ORIGINS);
+		  differentDestination += kpisFileMap.get(DIFFERENT_DESTINATIONS);
 		}
-		kpis.setnProcessedFiles(complexMap.size());
+		kpis.setnProcessedFiles(kpisTotalMap.size());
 		kpis.setnRows(nRows);
 		kpis.setnCalls(nCalls);
 		kpis.setnMessages(nMsgs);
@@ -232,7 +240,7 @@ public class VasService implements IVasService{
 		kpis.setDurationJsonProcess(ficherosProcesados);
 	}
 	
-	private boolean comprobarGenerico(String linea){
+	private boolean checkGenericFields(String linea){
 		Iterator<Entry<String, JsonNode>> campos = Util.getFields(linea);
 		int contadorCampos = 0;
 		boolean todoscampos = true;
@@ -256,7 +264,7 @@ public class VasService implements IVasService{
 		return todoscampos;
 	}
 	
-	private void calcularCamposLlamada(String linea, boolean todoscamposgenericos){
+	private void checkCallFields(String linea, boolean todoscamposgenericos){
 		Iterator<Entry<String, JsonNode>> campos = Util.getFields(linea);
 		int contadorCampos = 0;
 		String value = null;
@@ -269,10 +277,10 @@ public class VasService implements IVasService{
 			  }
 			  if (key.equals(Call.status_code.toString())){
 				  value = entry.getValue().asText();
-				  if (value.equals("OK")){
+				  if (value.equals(CALL_OK)){
 					  contadorLlamadasOK++;
 				  }
-				  else if(value.equals("KO")){
+				  else if(value.equals(CALL_KO)){
 					  contadorLlamadasKO++;
 				  }
 				  else {
@@ -289,7 +297,7 @@ public class VasService implements IVasService{
 		}
 	}
 	
-	private void calcularCamposMensaje(String linea, boolean todoscamposgenericos){
+	private void checkMsgFields(String linea, boolean todoscamposgenericos){
 		Iterator<Entry<String, JsonNode>> campos = Util.getFields(linea);
 		String value = null;
 		String key = null;
@@ -310,7 +318,7 @@ public class VasService implements IVasService{
 			  } 
 			  else if (key.equals(Msg.message_status.toString())){
 				  value = entry.getValue().asText();
-				  if (value.equals("DELIVERED") || value.equals("SEEN")){
+				  if (value.equals(MSG_DELIVERED) || value.equals(MSG_SEEN)){
 					  contadorMensajes++;
 				  }
 				  else {
@@ -325,45 +333,46 @@ public class VasService implements IVasService{
 		}
 	}
 	
-	
-	private void comprobarTipoLlamada(String linea, boolean todoscamposgenericos){
-		System.out.println("Comprobando llamada");
-
-		//si faltan campos
-		//si campos erroneos
-		calcularCamposLlamada(linea,todoscamposgenericos);
-		//calculo duracion media llamadas
-		//llamadas por pais
-		//relacion ok/ko
 		
-	}
-	
-	private void comprobarTipoMensaje(String linea, boolean todoscamposgenericos){
-		System.out.println("Comprobando mensaje");
-
-		//si faltan campos y si campos erroneos
-		calcularCamposMensaje(linea, todoscamposgenericos);
-		//si contenido mensaje vacio
-		//ranking
-		
-		//getRanking(linea,rankingWords);
-	}
-	
-	
-	
-	
-	
-	
-	
-	
-	
 	private void getRanking(String messageContent){
-		for (String word: rankingWords){
+		for (String word: RANKING_WORDS){
 			int contador = resultWordRanking.get(word);
 			resultWordRanking.put(word,contador +StringUtils.countOccurrencesOf(messageContent, word));
 			System.out.println(word+" = "+resultWordRanking.get(word));
 		}
 	}
+	
+	
+	private String getContentFileFromUrl(String date){
+		String url = RESOURCE_URL;	
+		String extension = SUFFIX_FILE;
+		String transactionUrl = url+date+extension;
+		UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(transactionUrl);
+		//obtenemos un string con el fichero
+		String contentFile = restTemplate.getForObject(builder.toUriString(), String.class);
+		
+		return contentFile;
+	}
+	
+
+	
+	private Map<String, Map<String,Long>> addKpisToMap (Map<String, Map<String,Long>> kpisMap, String file, long nRows, long nCalls,
+			long nMsgs, long differentOrigin, long differentDestination, long durationProcess){
+		
+		Map <String,Long> values  = new HashMap<>();
+		values.put(NUMBER_ROWS, nRows);
+		values.put(NUMBER_CALLS, nCalls);
+		values.put(NUMBER_MSGS, nMsgs);
+		values.put(DIFFERENT_ORIGINS, differentOrigin);
+		values.put(DIFFERENT_DESTINATIONS,differentDestination);
+		values.put(PROCESS_DURATION, durationProcess);
+		kpisMap.put(file, values);
+		
+		return kpisMap;
+	}
+	
+	
+	/************************************INITIALIZATION*********************************/
 	
 	private void inicializarContadores(){
 		contadorLLamadasConError = 0;
@@ -373,19 +382,20 @@ public class VasService implements IVasService{
 		contadorMensajesConError = 0;
 		contadorMensajesSinContenido = 0;
 		contadorMissingField = 0;
+		counterWrongLines = 0;
 	}
 	
 	private void establecerRankingWords(){ 
-		rankingWords = Arrays.asList("ARE", "YOU", "FINE", "HELLO", "NOT");
+		//rankingWords = Arrays.asList("ARE", "YOU", "FINE", "HELLO", "NOT");
 		resultWordRanking = new HashMap<>();
-		for (String word: rankingWords){
+		for (String word: RANKING_WORDS){
 			resultWordRanking.put(word, 0);
 		}
 	}
 	
 	private void inicializarpkis(){
 		ficherosProcesados = new HashMap<>();
-		complexMap = new HashMap<>();
+		auxKpisMap = new HashMap<>();
 	}
 	
 	private void inicializarAuxKpis(){
@@ -398,56 +408,8 @@ public class VasService implements IVasService{
 	}
 	
 	
-	private String[] formatLines (String contentFile){
-		//obtenemos cada línea del fichero
-		String[] lista = contentFile.split("\n");
-				
-		return lista;
-	}
-
-	private String[] extractFileNames (String kpisParam){
-		String [] fileNames = kpisParam.split("-");
-		return fileNames;
-	}
 	
-	private String getContentFileFromUrl(String date){
-		String url = "https://raw.githubusercontent.com/vas-test/test1/master/logs/MCP_";
-		String extension = ".json";
-		String transactionUrl = url+date+extension;
-		UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(transactionUrl);
-		//obtenemos un string con el fichero
-		String contentFile = restTemplate.getForObject(builder.toUriString(), String.class);
-		
-		return contentFile;
-	}
 	
-	private String tipodeMensaje(String jsonInString){
-		Iterator<Entry<String, JsonNode>> campos = Util.getFields(jsonInString);
-		String type = null;
-		while (campos.hasNext()){
-			  Map.Entry<String, JsonNode> entry = (Map.Entry<String, JsonNode>) campos.next();		
-			  if (entry.getKey().equals(MessageType.message_type.toString())){
-				  type = entry.getValue().asText();
-				  break;
-			  }
-		}
-		
-		return type;
-	}
 	
-	private Map<String, Map<String,Long>> fillComplexMap (Map<String, Map<String,Long>> complexMap, String file, long nRows, long nCalls,
-			long nMsgs, long differentOrigin, long differentDestination, long durationProcess){
-		
-		Map <String,Long> values  = new HashMap<>();
-		values.put("nRows", nRows);
-		values.put("nCalls", nCalls);
-		values.put("nMsgs", nMsgs);
-		values.put("differentOrigin", differentOrigin);
-		values.put("differentDestination",differentDestination);
-		values.put("durationProcess", durationProcess);
-		complexMap.put(file, values);
-		
-		return complexMap;
-	}
 
 }

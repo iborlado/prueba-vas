@@ -28,24 +28,6 @@ public class Util {
 	    return valid;
 	  }
 	
-	public static void toArray(String jsonInString){
-		final ObjectMapper mapper = new ObjectMapper();
-	       try {
-			JsonNode jsonnode = mapper.readTree(jsonInString);
-			
-			System.out.println("UTIL.toArray = "+jsonInString+ "es nulo?"+jsonnode.isNull());
-				System.out.println(" ------->Campo "+MessageType.message_type+" = "+jsonnode.path(MessageType.message_type.toString()).asText());
-				System.out.println(" ------->Campo "+MessageType.origin+" = "+jsonnode.path(MessageType.origin.toString()).asText());
-				System.out.println(" ------->Campo "+MessageType.destination+" = "+jsonnode.path(MessageType.destination.toString()).asText());
-				System.out.println(" ------->Campo "+Msg.message_status+" = "+jsonnode.path(Msg.message_status.toString()));
-				
-		} catch (JsonProcessingException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-	}
-	
 	public static Iterator<String> getFieldNames(String jsonInString){
 		final ObjectMapper mapper = new ObjectMapper();
 		Iterator<String> fieldNames = null;
