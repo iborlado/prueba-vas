@@ -98,8 +98,7 @@ public class VasService implements IVasService{
 	}
 	
 
-	public void calculateMetrics(String fecha) {
-		Long inicioProceso = new Date().getTime();
+	public Metrics calculateMetrics(String date) {
 		int numLineasErroneas = 0;
 		inicializarContadores();
 		inicializarAuxKpis();
@@ -107,7 +106,7 @@ public class VasService implements IVasService{
 		
 	
 		//obtenemos un string con el fichero
-		String contentFile = getContentFileFromUrl(fecha);
+		String contentFile = getContentFileFromUrl(date);
 		//obtenemos cada línea del fichero
 		String[] lista = formatLines(contentFile);
 		
@@ -176,32 +175,42 @@ public class VasService implements IVasService{
 		System.out.println(metrics.getRelationshipOkKoCalls().get("OK")+"OK / "+metrics.getRelationshipOkKoCalls().get("KO")+"KO");
 
 
-		//return metrics;
-		Long finProceso = new Date().getTime();
-		System.out.println("Proceso "+fecha+ "--> "+ (finProceso-inicioProceso)+" ms");
-
-		ficherosProcesados.put("MCP_"+fecha+".json", finProceso-inicioProceso);
-		durationProcess = finProceso-inicioProceso;
-		
+		return metrics;
 		
 	}
 	
 	
-	public void calculateKpis(String fechas){
-		System.out.println(fechas);
+	public Kpis calculateKpis(String dates){
+		System.out.println(dates);
 		inicializarpkis();
-		String [] fileNames = extractFileNames(fechas);
+		String [] fileNames = extractFileNames(dates);
 		//repeat to all files
 		for (String name: fileNames){
+			Long inicioProceso = new Date().getTime();
+
 		calculateMetrics(name);
+		//obtener duracion del proceso
+		
+		durationProcess = calcularTimeofProcces(inicioProceso, name);
+		
+		
 		complexMap = fillComplexMap(complexMap, name, nRows, nCalls, nMsgs, differentOrigin, differentDestination, durationProcess);
 		}
 		
 		//calcular totales y devolver objeto kpis
 		fillKpis(complexMap);
-		
+		return kpis;
 	}
 	
+	private Long calcularTimeofProcces (Long inicioProceso, String fichero){
+		Long duration = 0l;
+		Long finProceso = new Date().getTime();
+		duration = finProceso-inicioProceso;
+		System.out.println("Proceso "+fichero+ "--> "+ duration +" ms");
+
+		ficherosProcesados.put("MCP_"+fichero+".json", duration);
+		return duration;
+	}
 	
 	private void fillKpis(Map<String, Map<String,Long>> complexMap){
 		System.out.println("Ficheros procesados = "+complexMap.size());
