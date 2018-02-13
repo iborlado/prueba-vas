@@ -158,20 +158,21 @@ public class VasService implements IVasService{
 		for (String linea : lista){
 			try{
 				System.out.print(linea);
-				boolean valida = Util.isJSONValid(linea);
-				if (valida){
+				boolean validJson = Util.isJSONValid(linea);
+				if (validJson){
 					response+=linea+",";
-					String tipoMensaje = UtilBusiness.tipodeMensaje(linea);
-					System.out.println("tipo de mensaje = "	+ tipoMensaje);
-					if (tipoMensaje != null){
-						boolean todoscamposgenericos = checkGenericFields(linea);
+					if (checkGenericFields(linea)){
+						String tipoMensaje = UtilBusiness.tipodeMensaje(linea);
 						if (tipoMensaje.equals(CALL)){
 							nCalls++;
-							checkCallFields(linea, todoscamposgenericos);
+							checkCallFields(linea);
 						}
 						else if (tipoMensaje.equals(MSG)){
 							nMsgs++;
-							checkMsgFields(linea, todoscamposgenericos);
+							checkMsgFields(linea);
+						}
+						else {
+							wrongLines++;
 						}
 					}
 				}
@@ -240,42 +241,67 @@ public class VasService implements IVasService{
 		kpis.setDurationJsonProcess(ficherosProcesados);
 	}
 	
-	private boolean checkGenericFields(String linea){
-		Iterator<Entry<String, JsonNode>> campos = Util.getFields(linea);
-		int contadorCampos = 0;
-		boolean todoscampos = true;
-		while (campos.hasNext()){
-			  Map.Entry<String, JsonNode> entry = (Map.Entry<String, JsonNode>) campos.next();
+	private boolean checkGenericFields(String jsonLine){
+		int countFields = 0;
+		boolean genericFieldsOk = false;
+		boolean existMessageTypeField = false;
+		boolean existTimestampField = false;
+		boolean existOriginField = false;
+		boolean existDestinationField = false;
+		Iterator<Entry<String, JsonNode>> fields = Util.getFields(jsonLine);
+		
+		while (fields.hasNext()){
+			  Map.Entry<String, JsonNode> entry = (Map.Entry<String, JsonNode>) fields.next();
 			  String key = entry.getKey();
 			  if (key.equals(MessageType.message_type.toString())){
-				  contadorCampos++;
+				  existMessageTypeField = true;
+				  countFields++;
 			  }else if (key.equals(MessageType.timestamp.toString())){
-				  contadorCampos++;
+				  existTimestampField = true;
+				  countFields++;
 			  }else if (key.equals(MessageType.origin.toString())){
-				  contadorCampos++;
+				  existOriginField = true;
+				  countFields++;
 			  }else if (key.equals(MessageType.destination.toString())){
-				  contadorCampos++;
+				  existDestinationField = true;
+				  countFields++;
 			  }
 		}
-		if (contadorCampos < MessageType.values().length){
-			contadorMissingField++;
-			todoscampos = false;
+		
+		//Ensure the existence of mandatory fields
+		if (existMessageTypeField && existTimestampField && existOriginField && existDestinationField){
+			//Avoid repeated fields
+			if(countFields == MessageType.values().length){
+				genericFieldsOk = true;
+			} 
+			else {
+				counterWrongLines++;
+			}
 		}
-		return todoscampos;
+		else {
+			contadorMissingField++;
+		}
+		return genericFieldsOk;
 	}
 	
-	private void checkCallFields(String linea, boolean todoscamposgenericos){
-		Iterator<Entry<String, JsonNode>> campos = Util.getFields(linea);
-		int contadorCampos = 0;
+	private void checkCallFields(String jsonLine){
+		int counterFields = 0;
+		boolean existDurationField = false;
+		boolean existStatusCodeField = false;
+		boolean existStatusDescriptionField = false;
 		String value = null;
-		while (campos.hasNext()){
-			  Map.Entry<String, JsonNode> entry = (Map.Entry<String, JsonNode>) campos.next();	
+		Iterator<Entry<String, JsonNode>> fields = Util.getFields(jsonLine);
+				
+		while (fields.hasNext()){
+			  Map.Entry<String, JsonNode> entry = (Map.Entry<String, JsonNode>) fields.next();	
 			  String key = entry.getKey();
 
 			  if (key.equals(Call.duration.toString())){
-				  contadorCampos++;
+				  existDurationField = true;
+				  counterFields++;
 			  }
-			  if (key.equals(Call.status_code.toString())){
+			  else if (key.equals(Call.status_code.toString())){
+				  existStatusCodeField = true;
 				  value = entry.getValue().asText();
 				  if (value.equals(CALL_OK)){
 					  contadorLlamadasOK++;
@@ -286,37 +312,51 @@ public class VasService implements IVasService{
 				  else {
 					  contadorLLamadasConError++;
 				  }
-				  contadorCampos++;
+				  counterFields++;
 			  }
 			  else if (key.equals(Call.status_description.toString())){
-				  contadorCampos++;
+				  existStatusDescriptionField = true;
+				  counterFields++;
 			  }
 		}
-		if ((contadorCampos < Call.values().length) && todoscamposgenericos){
+		
+		//Ensure the existence of mandatory fields
+		if (existDurationField && existStatusCodeField && existStatusDescriptionField){
+			//Avoid repeated fields
+			if(counterFields != Call.values().length){
+				counterWrongLines++;
+			} 
+		}
+		else {
 			contadorMissingField++;
 		}
+	
 	}
 	
-	private void checkMsgFields(String linea, boolean todoscamposgenericos){
-		Iterator<Entry<String, JsonNode>> campos = Util.getFields(linea);
+	private void checkMsgFields(String jsonLine){
 		String value = null;
 		String key = null;
-		int contadorCampos = 0;
-
-		while (campos.hasNext()){
-			  Map.Entry<String, JsonNode> entry = (Map.Entry<String, JsonNode>) campos.next();	
+		int counterFields = 0;
+		boolean existMsgContentField = false;
+		boolean existMsgStatusField = false;
+		Iterator<Entry<String, JsonNode>> fields = Util.getFields(jsonLine);
+		
+		while (fields.hasNext()){
+			  Map.Entry<String, JsonNode> entry = (Map.Entry<String, JsonNode>) fields.next();	
 			  key = entry.getKey();
 			  if (key.equals(Msg.message_content.toString())){
+				  existMsgContentField = true;
 				  value = entry.getValue().asText();
 				  if(value==null || value.isEmpty() ){
 					  contadorMensajesSinContenido++;
 				  }
 				  else {
-					  getRanking(value);
+					  addWordtoRanking(value);
 				  }
-				  contadorCampos++;
+				  counterFields++;
 			  } 
 			  else if (key.equals(Msg.message_status.toString())){
+				  existMsgStatusField = true;
 				  value = entry.getValue().asText();
 				  if (value.equals(MSG_DELIVERED) || value.equals(MSG_SEEN)){
 					  contadorMensajes++;
@@ -324,17 +364,26 @@ public class VasService implements IVasService{
 				  else {
 					  contadorMensajesConError++;
 				  }
-				  contadorCampos++;
+				  counterFields++;
 			  }
 			  
 		}
-		if ((contadorCampos < Msg.values().length) && todoscamposgenericos){
+		
+		//Ensure the existence of mandatory fields
+		if (existMsgContentField && existMsgStatusField){
+			//Avoid repeated fields
+			if(counterFields != Msg.values().length){
+				counterWrongLines++;
+			} 
+		}
+		else {
 			contadorMissingField++;
 		}
+		
 	}
 	
 		
-	private void getRanking(String messageContent){
+	private void addWordtoRanking(String messageContent){
 		for (String word: RANKING_WORDS){
 			int contador = resultWordRanking.get(word);
 			resultWordRanking.put(word,contador +StringUtils.countOccurrencesOf(messageContent, word));
@@ -386,7 +435,6 @@ public class VasService implements IVasService{
 	}
 	
 	private void establecerRankingWords(){ 
-		//rankingWords = Arrays.asList("ARE", "YOU", "FINE", "HELLO", "NOT");
 		resultWordRanking = new HashMap<>();
 		for (String word: RANKING_WORDS){
 			resultWordRanking.put(word, 0);
