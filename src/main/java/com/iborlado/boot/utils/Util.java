@@ -17,6 +17,11 @@ import com.iborlado.boot.dto.Msg;
 
 public class Util {
 
+	/**
+	 * 
+	 * @param jsonInString
+	 * @return
+	 */
 	public static boolean isJSONValid(String jsonInString ) {
 		boolean valid = true;
 	    try {
@@ -28,6 +33,11 @@ public class Util {
 	    return valid;
 	  }
 	
+	/**
+	 * 
+	 * @param jsonInString
+	 * @return
+	 */
 	public static Iterator<String> getFieldNames(String jsonInString){
 		final ObjectMapper mapper = new ObjectMapper();
 		Iterator<String> fieldNames = null;
@@ -43,6 +53,11 @@ public class Util {
 		return fieldNames;
 	}
 	
+	/**
+	 * 
+	 * @param jsonInString
+	 * @return
+	 */
 	public static Iterator<Entry<String, JsonNode>> getFields(String jsonInString){
 		final ObjectMapper mapper = new ObjectMapper();
 		Iterator<Entry<String, JsonNode>> fields = null;
@@ -58,6 +73,11 @@ public class Util {
 		return fields;
 	}
 	
+	/**
+	 * 
+	 * @param mapToSort
+	 * @return
+	 */
 	public static Map<String,Integer> sortMapByValue(Map<String,Integer> mapToSort){
 		Map<String,Integer> sortedMap = null;
 		try{
@@ -77,6 +97,11 @@ public class Util {
 	}
 
 
+	/**
+	 * 
+	 * @param mapToSort
+	 * @return
+	 */
 	public static Map<String,Long> sortMapByKey(Map<String,Long> mapToSort){
 		Map<String,Long> sortedMap = null;
 		try{
@@ -95,6 +120,5 @@ public class Util {
 		return sortedMap;
 	}
 
-	
 
 }

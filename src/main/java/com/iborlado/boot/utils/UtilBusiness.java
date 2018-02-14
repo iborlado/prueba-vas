@@ -10,9 +10,11 @@ import com.iborlado.boot.dto.MessageType;
 
 public class UtilBusiness {
 
-	public UtilBusiness() {
-	}
-	
+	/**
+	 * 
+	 * @param contentFile
+	 * @return
+	 */
 	public static String[] formatLines (String contentFile){
 		//obtenemos cada línea del fichero
 		String[] list = contentFile.split("\n");
@@ -20,25 +22,40 @@ public class UtilBusiness {
 		return list;
 	}
 
+	/**
+	 * 
+	 * @param kpisParams
+	 * @return
+	 */
 	public static String[] extractFileNames (String kpisParams){
 		String [] fileNames = kpisParams.split("-");
 		return fileNames;
 	}
 	
-	public static Long calcularTimeofProcces (Long inicioProceso, String fichero){
+	/**
+	 * 
+	 * @param startProcess
+	 * @param file
+	 * @return
+	 */
+	public static Long calculateTimeofProcces (Long startProcess, String file){
 		Long duration = 0l;
-		Long finProceso = new Date().getTime();
-		duration = finProceso-inicioProceso;
-		System.out.println("Proceso "+fichero+ "--> "+ duration +" ms");
+		Long finishProcess = new Date().getTime();
+		duration = finishProcess-startProcess;
 
 		return duration;
 	}
 	
-	public static String tipodeMensaje(String jsonInString){
-		Iterator<Entry<String, JsonNode>> campos = Util.getFields(jsonInString);
+	/**
+	 * 
+	 * @param jsonInString
+	 * @return
+	 */
+	public static String getTypeOfMessage(String jsonInString){
+		Iterator<Entry<String, JsonNode>> fields = Util.getFields(jsonInString);
 		String type = null;
-		while (campos.hasNext()){
-			  Map.Entry<String, JsonNode> entry = (Map.Entry<String, JsonNode>) campos.next();		
+		while (fields.hasNext()){
+			  Map.Entry<String, JsonNode> entry = (Map.Entry<String, JsonNode>) fields.next();		
 			  if (entry.getKey().equals(MessageType.message_type.toString())){
 				  type = entry.getValue().asText();
 				  break;
