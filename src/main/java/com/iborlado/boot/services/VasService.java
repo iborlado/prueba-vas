@@ -33,7 +33,7 @@ public class VasService implements IVasService{
 	@Autowired
 	Kpis kpis;
 	
-	//CTES, pasar a properties
+	//CTES, 
 	private static final String RESOURCE_URL = "https://raw.githubusercontent.com/vas-test/test1/master/logs/MCP_";
 	private static final String PREFIX_FILE = "MCP_";
 	private static final String SUFFIX_FILE = ".json";
