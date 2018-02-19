@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
@@ -22,6 +24,7 @@ import com.iborlado.boot.utils.Util;
 import com.iborlado.boot.utils.UtilBusiness;
 
 @Service
+@Primary
 public class VasService implements IVasService{
 
 	@Autowired
@@ -33,24 +36,43 @@ public class VasService implements IVasService{
 	@Autowired
 	Kpis kpis;
 	
-	//CTES, 
-	private static final String RESOURCE_URL = "https://raw.githubusercontent.com/vas-test/test1/master/logs/MCP_";
-	private static final String PREFIX_FILE = "MCP_";
-	private static final String SUFFIX_FILE = ".json";
-	private static final String NUMBER_ROWS = "nRows";
-	private static final String NUMBER_CALLS = "nCalls";
-	private static final String NUMBER_MSGS = "nMsgs";
-	private static final String DIFFERENT_ORIGINS = "differentOrigin";
-	private static final String DIFFERENT_DESTINATIONS = "differentDestination";
-	private static final String PROCESS_DURATION = "durationProcess";
-	private static final String CALL = "CALL";
-	private static final String CALL_OK = "OK";
-	private static final String CALL_KO = "KO";
-	private static final String MSG = "MSG";
-	private static final String MSG_DELIVERED = "DELIVERED";
-	private static final String MSG_SEEN = "SEEN";
-	private static final String[] RANKING_WORDS = {"ARE", "YOU", "FINE", "HELLO", "NOT"};
-	
+	//Get constant values from properties file
+	@Value("${vas.resource.url}")
+	private String resource_url;
+	@Value("${vas.prefix.file}")
+	private String prefix_file;
+	@Value("${vas.suffix.file}")
+	private String suffix_file;
+	@Value("${vas.number.rows}")
+	private String number_rows;
+	@Value("${vas.number.calls}")
+	private String number_calls;
+	@Value("${vas.number.msgs}")
+	private String number_msgs;
+	@Value("${vas.different.origins}")
+	private String different_origins;
+	@Value("${vas.different.destinations}")
+	private String different_destinations;
+	@Value("${vas.process.duration}")
+	private String process_duration;
+	@Value("${vas.call}")
+	private String call;
+	@Value("${vas.call.ok}")
+	private String call_ok;
+	@Value("${vas.call.ko}")
+	private String call_ko;
+	@Value("${vas.msg}")
+	private String msg;
+	@Value("${vas.msg.delivered}")
+	private String msg_delivered;
+	@Value("${vas.msg.seen}")
+	private String msg_seen;
+	@Value("${vas.max.digits}")
+	private int max_digits;
+
+	// Words of ranking test {“ARE, YOU, FINE, HELLO, NOT”}
+	private final String[] RANKING_WORDS = {"ARE", "YOU", "FINE", "HELLO", "NOT"};
+
 	//METRICS
 	private int counterMissingField;
 	private int counterCallsWithError;
@@ -73,6 +95,7 @@ public class VasService implements IVasService{
 	private long durationProcess;
 	
 	
+
 	@Override
 	public String getJsonFromFile(String date) {
 		int nWrongLines = 0;
@@ -109,7 +132,6 @@ public class VasService implements IVasService{
 	public Metrics calculateMetrics(String date) {
 		processFile(date);
 		fillMetricValues();
-		
 		return metrics;
 	}
 	
@@ -123,7 +145,7 @@ public class VasService implements IVasService{
 			Long startProcess = new Date().getTime();
 			processFile(name);
 			durationProcess = UtilBusiness.calculateTimeofProcces(startProcess, name);
-			processedFiles.put(PREFIX_FILE+name+SUFFIX_FILE, durationProcess);
+			processedFiles.put(prefix_file+name+suffix_file, durationProcess);
 			//save values to assign later to the "kpis" object 
 			auxKpisMap = addKpisToMap(auxKpisMap, name, nRows, nCalls, nMsgs, differentOrigin, differentDestination, durationProcess);
 		}
@@ -152,11 +174,11 @@ public class VasService implements IVasService{
 					response+=line+",";
 					if (checkGenericFields(line)){
 						String typeOfMessage = UtilBusiness.getTypeOfMessage(line);
-						if (typeOfMessage.equals(CALL)){
+						if (typeOfMessage.equals(call)){
 							nCalls++;
 							checkCallFields(line);
 						}
-						else if (typeOfMessage.equals(MSG)){
+						else if (typeOfMessage.equals(msg)){
 							nMsgs++;
 							checkMsgFields(line);
 						}
@@ -189,8 +211,8 @@ public class VasService implements IVasService{
 		metrics.setnCallsByCountry(null);
 		
 		Map<String,Integer> relationship = new HashMap<>();
-		relationship.put(CALL_OK, counterCallsOK);
-		relationship.put(CALL_KO, counterCallsKO);
+		relationship.put(call_ok, counterCallsOK);
+		relationship.put(call_ko, counterCallsKO);
 		metrics.setRelationshipOkKoCalls(relationship);
 		
 		metrics.setAverageCallByCountry(null);
@@ -204,11 +226,11 @@ public class VasService implements IVasService{
 	private void fillKpiValues(Map<String, Map<String,Long>> kpisTotalMap){
 		initializeAuxKpis();
 		for(Map<String, Long> kpisFileMap: kpisTotalMap.values()){
-		  nRows += 	kpisFileMap.get(NUMBER_ROWS);
-		  nCalls += kpisFileMap.get(NUMBER_CALLS);
-		  nMsgs += kpisFileMap.get(NUMBER_MSGS);
-		  differentOrigin += kpisFileMap.get(DIFFERENT_ORIGINS);
-		  differentDestination += kpisFileMap.get(DIFFERENT_DESTINATIONS);
+		  nRows += 	kpisFileMap.get(number_rows);
+		  nCalls += kpisFileMap.get(number_calls);
+		  nMsgs += kpisFileMap.get(number_msgs);
+		  differentOrigin += kpisFileMap.get(different_origins);
+		  differentDestination += kpisFileMap.get(different_destinations);
 		}
 		kpis.setnProcessedFiles(kpisTotalMap.size());
 		kpis.setnRows(nRows);
@@ -282,10 +304,10 @@ public class VasService implements IVasService{
 			  else if (key.equals(Call.status_code.toString())){
 				  existStatusCodeField = true;
 				  value = entry.getValue().asText();
-				  if (value.equals(CALL_OK)){
+				  if (value.equals(call_ok)){
 					  counterCallsOK++;
 				  }
-				  else if(value.equals(CALL_KO)){
+				  else if(value.equals(call_ko)){
 					  counterCallsKO++;
 				  }
 				  else {
@@ -337,7 +359,7 @@ public class VasService implements IVasService{
 			  else if (key.equals(Msg.message_status.toString())){
 				  existMsgStatusField = true;
 				  value = entry.getValue().asText();
-				  if (value.equals(MSG_DELIVERED) || value.equals(MSG_SEEN)){
+				  if (value.equals(msg_delivered) || value.equals(msg_seen)){
 					  counterMessages++;
 				  }
 				  else {
@@ -361,7 +383,6 @@ public class VasService implements IVasService{
 		
 	}
 	
-		
 	private void addWordtoRanking(String messageContent){
 		for (String word: RANKING_WORDS){
 			int contador = resultWordRanking.get(word);
@@ -371,8 +392,8 @@ public class VasService implements IVasService{
 	
 	
 	private String getContentFileFromUrl(String date){
-		String url = RESOURCE_URL;	
-		String extension = SUFFIX_FILE;
+		String url = resource_url;	
+		String extension = suffix_file;
 		String transactionUrl = url+date+extension;
 		UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(transactionUrl);
 		//get file from URI
@@ -387,15 +408,27 @@ public class VasService implements IVasService{
 			long nMsgs, long differentOrigin, long differentDestination, long durationProcess){
 		
 		Map <String,Long> values  = new HashMap<>();
-		values.put(NUMBER_ROWS, nRows);
-		values.put(NUMBER_CALLS, nCalls);
-		values.put(NUMBER_MSGS, nMsgs);
-		values.put(DIFFERENT_ORIGINS, differentOrigin);
-		values.put(DIFFERENT_DESTINATIONS,differentDestination);
-		values.put(PROCESS_DURATION, durationProcess);
+		values.put(number_rows, nRows);
+		values.put(number_calls, nCalls);
+		values.put(number_msgs, nMsgs);
+		values.put(different_origins, differentOrigin);
+		values.put(different_destinations,differentDestination);
+		values.put(process_duration, durationProcess);
 		kpisMap.put(file, values);
 		
 		return kpisMap;
+	}
+	
+	
+	/**
+	 * GSM - DCS 1800
+	 * @param msisdn
+	 */
+	private void getCountryCode(String msisdn){
+		String countryCode;
+		String nationalDestinationCode;
+		String subscriberNumber;
+		Map<String,String> fourDigitsCountryCodes = new HashMap<>();
 	}
 	
 	
@@ -434,5 +467,34 @@ public class VasService implements IVasService{
 	}
 	
 	
+	/********************************************OTHERS********************************************/
+	/*Other way get properties
+	 * @Autowired
+	private Environment env;
+	private void getProperties(){
+		RESOURCE_URL = env.getProperty("vas.resource.url");
+		PREFIX_FILE =  env.getProperty("vas.prefix.file");
+		SUFFIX_FILE = env.getProperty("vas.suffix.file");
+		NUMBER_ROWS = env.getProperty("vas.number.rows");
+		NUMBER_CALLS = env.getProperty("vas.number.calls");
+		NUMBER_MSGS = env.getProperty("vas.number.msgs");
+		DIFFERENT_ORIGINS = env.getProperty("vas.different.origins");
+		DIFFERENT_DESTINATIONS = env.getProperty("vas.different.destinations");
+		PROCESS_DURATION = env.getProperty("vas.process.duration");
+		CALL = env.getProperty("vas.call");
+		CALL_OK = env.getProperty("vas.call.ok");
+		CALL_KO = env.getProperty("vas.call.ko");
+		MSG = env.getProperty("vas.msg");
+		MSG_DELIVERED = env.getProperty("vas.msg.delivered");
+		MSG_SEEN = env.getProperty("vas.msg.seen");
+		MAX_DIGITS = Integer.valueOf(env.getProperty("vas.max.digits"));
+		WORD1 = env.getProperty("vas.ranking.words.word1");
+		WORD2 = env.getProperty("vas.ranking.words.word2");
+		WORD3 = env.getProperty("vas.ranking.words.word3");
+		WORD4 = env.getProperty("vas.ranking.words.word4");
+		WORD5 = env.getProperty("vas.ranking.words.word5");
+	}*/
+	
 
+	
 }
