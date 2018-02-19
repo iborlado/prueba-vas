@@ -16,7 +16,7 @@ public class UtilBusiness {
 	 * @return
 	 */
 	public static String[] formatLines (String contentFile){
-		//obtenemos cada línea del fichero
+		//each json line is separated by line break
 		String[] list = contentFile.split("\n");
 				
 		return list;
