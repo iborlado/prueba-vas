@@ -8,11 +8,18 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.iborlado.boot.services.VasService;
 
 public class Util {
+
+	//Logging
+	private static final Logger logger = LoggerFactory.getLogger(Util.class);
 
 	/**
 	 * 
@@ -43,9 +50,9 @@ public class Util {
 			fieldNames = mapper.readTree(jsonInString).fieldNames();
 			
 		} catch (JsonProcessingException e) {
-			e.printStackTrace();
+			logger.error(e.getMessage());
 		} catch (IOException e) {
-			e.printStackTrace();
+			logger.error(e.getMessage());
 		}
 		return fieldNames;
 	}
@@ -63,9 +70,9 @@ public class Util {
 			fields = mapper.readTree(jsonInString).fields();
 			
 		} catch (JsonProcessingException e) {
-			e.printStackTrace();
+			logger.error(e.getMessage());
 		} catch (IOException e) {
-			e.printStackTrace();
+			logger.error(e.getMessage());
 		}
 		return fields;
 	}
@@ -88,7 +95,7 @@ public class Util {
 								LinkedHashMap::new
 								));
 		} catch(Exception e){
-			e.printStackTrace();
+			logger.error(e.getMessage());
 		}
 		return sortedMap;
 	}
@@ -112,7 +119,7 @@ public class Util {
 								LinkedHashMap::new
 								));
 		} catch(Exception e){
-			e.printStackTrace();
+			logger.error(e.getMessage());;
 		}
 		return sortedMap;
 	}

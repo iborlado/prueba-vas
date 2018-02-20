@@ -1,11 +1,15 @@
 package com.iborlado.boot.services;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Primary;
@@ -14,12 +18,16 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.iborlado.boot.dto.Call;
 import com.iborlado.boot.dto.Kpis;
 import com.iborlado.boot.dto.MessageType;
 import com.iborlado.boot.dto.Metrics;
 import com.iborlado.boot.dto.Msg;
+import com.iborlado.boot.dto.PhoneNumber;
 import com.iborlado.boot.utils.Util;
 import com.iborlado.boot.utils.UtilBusiness;
 
@@ -83,6 +91,8 @@ public class VasService implements IVasService{
 	private int counterMessagesWithoutContent;
 	private Map<String,Integer> resultWordRanking;
 	private int counterWrongLines;
+	private Map<String,Long> callsByOriginCountry;
+	private Map<String,Long> callsByDestinationCountry;
 	
 	//KPIS
 	private Map<String, Long> processedFiles;
@@ -94,8 +104,15 @@ public class VasService implements IVasService{
 	private long differentDestination;
 	private long durationProcess;
 	
+	//Country codes
+	private Map<String,String> fourDigitsCountryCodes;
+	private Map<String,String> twoOrThreeDigitsCountryCodes;
 	
+	//Logging
+	private final Logger logger = LoggerFactory.getLogger(VasService.class);
 
+	
+	/********************************PUBLIC SERVICE METHODS********************/
 	@Override
 	public String getJsonFromFile(String date) {
 		int nWrongLines = 0;
@@ -105,7 +122,7 @@ public class VasService implements IVasService{
 		String response = "[";
 		for (String jsonLine : jsonList){
 			try{
-				System.out.print(jsonLine);
+				logger.debug(jsonLine);
 				boolean validLine = Util.isJSONValid(jsonLine);
 				if (validLine){
 					response+=jsonLine+",";
@@ -155,11 +172,14 @@ public class VasService implements IVasService{
 	}
 	
 
+	
+	/************************************HELPER METHODS************************************/
 	private String processFile(String date){
 		int wrongLines = 0;
 		initializeCounters();
 		initializeAuxKpis();
 		setupRankingWords();
+		loadCountryCodes("/countryCodes.json");
 		
 		String contentFile = getContentFileFromUrl(date);
 		String[] list = UtilBusiness.formatLines(contentFile);
@@ -168,7 +188,7 @@ public class VasService implements IVasService{
 		nRows = list.length;
 		for (String line : list){
 			try{
-				System.out.print(line);
+				logger.debug(line);
 				boolean validJson = Util.isJSONValid(line);
 				if (validJson){
 					response+=line+",";
@@ -200,7 +220,11 @@ public class VasService implements IVasService{
 		else{
 			response = response.substring(0, response.length()-1);
 		}
-		counterWrongLines = wrongLines;
+		counterWrongLines = wrongLines; 
+
+		logger.debug("llamadas por pais origen =  "+callsByOriginCountry.values());
+		logger.debug("llamadas por pais destino =  "+callsByDestinationCountry.values());
+		
 		return response;
 	}
 	
@@ -261,9 +285,19 @@ public class VasService implements IVasService{
 				  existTimestampField = true;
 				  countFields++;
 			  }else if (key.equals(MessageType.origin.toString())){
+				  String originCode = getCountryCode(entry.getValue().asText());
+				  if (originCode != null){
+					  Integer counterCalls = (int) (callsByOriginCountry.get(originCode)==null?1:(callsByOriginCountry.get(originCode)+1));
+					  callsByOriginCountry.put(originCode, counterCalls.longValue());
+				  }
 				  existOriginField = true;
 				  countFields++;
 			  }else if (key.equals(MessageType.destination.toString())){
+				  String destinationCode = getCountryCode(entry.getValue().asText());
+				  if (destinationCode != null){
+					  Integer counterCalls = (int) (callsByDestinationCountry.get(destinationCode)==null?1:(callsByDestinationCountry.get(destinationCode)+1));
+					  callsByDestinationCountry.put(destinationCode, counterCalls.longValue());
+				  }
 				  existDestinationField = true;
 				  countFields++;
 			  }
@@ -421,14 +455,61 @@ public class VasService implements IVasService{
 	
 	
 	/**
-	 * GSM - DCS 1800
+	 * Get country code
 	 * @param msisdn
 	 */
-	private void getCountryCode(String msisdn){
-		String countryCode;
-		String nationalDestinationCode;
-		String subscriberNumber;
-		Map<String,String> fourDigitsCountryCodes = new HashMap<>();
+	private String getCountryCode(String msisdn){
+		String auxCountryCode;
+		String countryName = null;
+		String countryCode = null;
+		logger.debug("msisdn = "+msisdn);
+		if (msisdn != null){
+			if (msisdn.startsWith("1")){
+				auxCountryCode = msisdn.substring(0,4);
+				countryName = fourDigitsCountryCodes.get(auxCountryCode);
+			}
+			else{
+				auxCountryCode = msisdn.substring(0,2);
+				logger.debug("Country code (2d) = "+auxCountryCode);
+				countryName = twoOrThreeDigitsCountryCodes.get(auxCountryCode);
+				if (countryName == null){
+					auxCountryCode = msisdn.substring(0,3);
+					logger.debug("Country code(3d) = "+auxCountryCode);
+					countryName = twoOrThreeDigitsCountryCodes.get(auxCountryCode);
+				}
+			}
+			if (countryName != null){
+				countryCode = auxCountryCode;
+			}
+		}
+		logger.debug("Country name = "+countryName+ "---> CC = "+countryCode);
+		return countryCode;
+	}
+	
+	
+	private void loadCountryCodes(String jsonFile){
+		ObjectMapper mapper = new ObjectMapper();
+		fourDigitsCountryCodes = new HashMap<>();
+		twoOrThreeDigitsCountryCodes = new HashMap<>();
+
+		InputStream is = this.getClass().getResourceAsStream(jsonFile);
+	    try {
+	    	   PhoneNumber[] value = mapper.readValue(is, PhoneNumber[].class);
+	    	   for(PhoneNumber phone: value){
+	    		   if (phone.getDialCode().startsWith("1")){
+	    			   fourDigitsCountryCodes.put(phone.getDialCode(),phone.getName());
+	    		   }
+	    		   else{
+	    			   twoOrThreeDigitsCountryCodes.put(phone.getDialCode(),phone.getName());
+	    		   }
+	    	   }
+	    } catch (JsonParseException e) {
+			logger.error(e.getMessage());
+		} catch (JsonMappingException e) {
+			logger.error(e.getMessage());
+		} catch (IOException e) {
+			logger.error(e.getMessage());
+		}
 	}
 	
 	
@@ -443,6 +524,8 @@ public class VasService implements IVasService{
 		counterMessagesWithoutContent = 0;
 		counterMissingField = 0;
 		counterWrongLines = 0;
+		callsByDestinationCountry = new HashMap<>();
+		callsByOriginCountry = new HashMap<>();
 	}
 	
 	private void setupRankingWords(){ 
