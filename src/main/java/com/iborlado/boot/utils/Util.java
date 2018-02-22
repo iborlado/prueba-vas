@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.iborlado.boot.services.VasService;
 
 public class Util {
 
@@ -124,5 +123,42 @@ public class Util {
 		return sortedMap;
 	}
 
-
+	/**
+	 * 
+	 * @param mapToSort
+	 * @return
+	 */
+	public static Map<String,Double> sortMapByKeyD(Map<String,Double> mapToSort){
+		Map<String,Double> sortedMap = null;
+		try{
+			sortedMap = mapToSort.entrySet()
+						.stream()
+						.sorted(Map.Entry.comparingByKey())
+						.collect(Collectors.toMap(
+								Map.Entry::getKey, 
+								Map.Entry::getValue, 
+								(e1, e2) -> e1, 
+								LinkedHashMap::new
+								));
+		} catch(Exception e){
+			logger.error(e.getMessage());;
+		}
+		return sortedMap;
+	}
+	
+	/**
+	 * 
+	 * @param doubleToRound
+	 * @return
+	 */
+	public static Double roundDouble(Double doubleToRound){
+		Double result = null;
+		try{
+			result = Double.valueOf(Math.round(doubleToRound));
+		}catch (Exception e) {
+			logger.error(e.getMessage());		
+		}
+		return result;
+	}
+	
 }

@@ -1,14 +1,24 @@
 package com.iborlado.boot.utils;
 
+import java.io.IOException;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.iborlado.boot.dto.Call;
 import com.iborlado.boot.dto.MessageType;
 
 public class UtilBusiness {
+
+	//Logging
+	private static final Logger logger = LoggerFactory.getLogger(UtilBusiness.class);
 
 	/**
 	 * 
@@ -63,5 +73,63 @@ public class UtilBusiness {
 		}
 		
 		return type;
+	}
+	
+	/**
+	 * 
+	 * @param jsonInString
+	 * @return
+	 */
+	public static Double getDurationCall(String jsonInString){
+		Double duration = null;
+		final ObjectMapper mapper = new ObjectMapper();
+		try {
+			duration = mapper.readTree(jsonInString).findValue(Call.duration.toString()).asDouble();
+			logger.debug("Duración = "+duration);
+		} catch (JsonProcessingException e) {
+			logger.error(e.getMessage());
+		} catch (IOException e) {
+			logger.error(e.getMessage());
+		}
+		
+		return duration;
+	}
+	
+	/**
+	 * 
+	 * @param jsonInString
+	 * @return
+	 */
+	public static String getOriginMsisdn(String jsonInString){
+		String msisdn = null;
+		final ObjectMapper mapper = new ObjectMapper();
+		try {
+			msisdn = mapper.readTree(jsonInString).findValue(MessageType.origin.toString()).asText();
+			logger.debug("Origin missdn = "+msisdn);
+		} catch (JsonProcessingException e) {
+			logger.error(e.getMessage());
+		} catch (IOException e) {
+			logger.error(e.getMessage());
+		}
+		return msisdn;
+	}
+	
+	/**
+	 * 
+	 * @param jsonInString
+	 * @return
+	 */
+	public static String getDestinationMsisdn(String jsonInString){
+		String msisdn = null;
+		final ObjectMapper mapper = new ObjectMapper();
+		try {
+			msisdn = mapper.readTree(jsonInString).findValue(MessageType.destination.toString()).asText();
+			logger.debug("destination missdn = "+msisdn);
+		} catch (JsonProcessingException e) {
+			logger.error(e.getMessage());
+		} catch (IOException e) {
+			logger.error(e.getMessage());
+		}
+		return msisdn;
 	}
 }

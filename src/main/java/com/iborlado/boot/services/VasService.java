@@ -93,6 +93,7 @@ public class VasService implements IVasService{
 	private int counterWrongLines;
 	private Map<String,Long> callsByOriginCountry;
 	private Map<String,Long> callsByDestinationCountry;
+	private Map <String,Double> averageCallDurationByCountry;
 	
 	//KPIS
 	private Map<String, Long> processedFiles;
@@ -197,6 +198,7 @@ public class VasService implements IVasService{
 						if (typeOfMessage.equals(call)){
 							nCalls++;
 							checkCallFields(line);
+							calculateNumberAndDurationCallsByCountry(line);
 						}
 						else if (typeOfMessage.equals(msg)){
 							nMsgs++;
@@ -222,8 +224,6 @@ public class VasService implements IVasService{
 		}
 		counterWrongLines = wrongLines; 
 
-		logger.debug("llamadas por pais origen =  "+callsByOriginCountry.values());
-		logger.debug("llamadas por pais destino =  "+callsByDestinationCountry.values());
 		
 		return response;
 	}
@@ -232,18 +232,22 @@ public class VasService implements IVasService{
 		metrics.setnRowsMissingFields(counterMissingField);
 		metrics.setnMessagesBlankContent(counterMessagesWithoutContent);
 		metrics.setnRowsFieldsErrors(counterCallsWithError+counterMessagesWithError+counterWrongLines);
-		metrics.setnCallsByCountry(null);
+		callsByOriginCountry = Util.sortMapByKey(callsByOriginCountry);
+		metrics.setnCallsByOriginCountry(callsByOriginCountry);
+		callsByDestinationCountry = Util.sortMapByKey(callsByDestinationCountry);
+		metrics.setnCallsByDestinationCountry(callsByDestinationCountry);
 		
 		Map<String,Integer> relationship = new HashMap<>();
 		relationship.put(call_ok, counterCallsOK);
 		relationship.put(call_ko, counterCallsKO);
 		metrics.setRelationshipOkKoCalls(relationship);
 		
-		metrics.setAverageCallByCountry(null);
+		getAverageCallDuration(callsByDestinationCountry);
+		averageCallDurationByCountry = Util.sortMapByKeyD(averageCallDurationByCountry);
+		metrics.setAverageCallByCountry(averageCallDurationByCountry);
 		
 		resultWordRanking = Util.sortMapByValue(resultWordRanking);
 		metrics.setWordOcurrenceRanking(resultWordRanking);
-		
 	}
 	
 	
@@ -285,19 +289,9 @@ public class VasService implements IVasService{
 				  existTimestampField = true;
 				  countFields++;
 			  }else if (key.equals(MessageType.origin.toString())){
-				  String originCode = getCountryCode(entry.getValue().asText());
-				  if (originCode != null){
-					  Integer counterCalls = (int) (callsByOriginCountry.get(originCode)==null?1:(callsByOriginCountry.get(originCode)+1));
-					  callsByOriginCountry.put(originCode, counterCalls.longValue());
-				  }
 				  existOriginField = true;
 				  countFields++;
 			  }else if (key.equals(MessageType.destination.toString())){
-				  String destinationCode = getCountryCode(entry.getValue().asText());
-				  if (destinationCode != null){
-					  Integer counterCalls = (int) (callsByDestinationCountry.get(destinationCode)==null?1:(callsByDestinationCountry.get(destinationCode)+1));
-					  callsByDestinationCountry.put(destinationCode, counterCalls.longValue());
-				  }
 				  existDestinationField = true;
 				  countFields++;
 			  }
@@ -401,7 +395,6 @@ public class VasService implements IVasService{
 				  }
 				  counterFields++;
 			  }
-			  
 		}
 		
 		//Ensure the existence of mandatory fields
@@ -462,7 +455,7 @@ public class VasService implements IVasService{
 		String auxCountryCode;
 		String countryName = null;
 		String countryCode = null;
-		logger.debug("msisdn = "+msisdn);
+		logger.debug("msisdn country code = "+msisdn);
 		if (msisdn != null){
 			if (msisdn.startsWith("1")){
 				auxCountryCode = msisdn.substring(0,4);
@@ -486,6 +479,66 @@ public class VasService implements IVasService{
 		return countryCode;
 	}
 	
+	private String getCountryName(String msisdn){
+		String auxCountryCode;
+		String countryName = null;
+		String countryCode = null;
+		logger.debug("msisdn country name = "+msisdn);
+		if (msisdn != null){
+			if (msisdn.startsWith("1")){
+				auxCountryCode = msisdn.substring(0,4);
+				countryName = fourDigitsCountryCodes.get(auxCountryCode);
+			}
+			else{
+				auxCountryCode = msisdn.substring(0,2);
+				logger.debug("Country code (2d) = "+auxCountryCode);
+				countryName = twoOrThreeDigitsCountryCodes.get(auxCountryCode);
+				if (countryName == null){
+					auxCountryCode = msisdn.substring(0,3);
+					logger.debug("Country code(3d) = "+auxCountryCode);
+					countryName = twoOrThreeDigitsCountryCodes.get(auxCountryCode);
+				}
+			}
+		}
+		logger.debug("Country name = "+countryName+ "---> CC = "+countryCode);
+		return countryName;
+	}
+	
+	private void calculateNumberAndDurationCallsByCountry(String jsonLine){
+		//String originCode = getCountryCode(entry.getValue().asText());
+		String originCode = getCountryName(UtilBusiness.getOriginMsisdn(jsonLine));
+		if (originCode != null){
+			Integer counterCalls = (int) (callsByOriginCountry.get(originCode)==null?1:(callsByOriginCountry.get(originCode)+1));
+			callsByOriginCountry.put(originCode, counterCalls.longValue());
+			setTotalCallDuration(jsonLine, originCode);
+		  }
+		  
+		//String destinationCode = getCountryCode(entry.getValue().asText());
+		String destinationCode = getCountryName(UtilBusiness.getDestinationMsisdn(jsonLine));
+		if (destinationCode != null){
+			Integer counterCalls = (int) (callsByDestinationCountry.get(destinationCode)==null?1:(callsByDestinationCountry.get(destinationCode)+1));
+			callsByDestinationCountry.put(destinationCode, counterCalls.longValue());
+		  }
+	}
+	
+	private void getAverageCallDuration(Map<String,Long> callsByCountry){
+		for (Map.Entry<String, Double> entry : averageCallDurationByCountry.entrySet()){
+			Double averageDuration = 0d;
+			String country = entry.getKey();
+			Double totalDuration = entry.getValue();
+			Long nCalls = callsByCountry.get(country);
+			averageDuration = totalDuration/Double.valueOf(nCalls);
+			logger.debug("Media "+country+" = "+Math.round(averageDuration));
+			averageCallDurationByCountry.put(country, Util.roundDouble(averageDuration));
+		}
+	}
+	
+	private void setTotalCallDuration(String jsonLine, String originCode){
+		 Double actualCallDuration = UtilBusiness.getDurationCall(jsonLine);
+		 Double averageCallDuration = averageCallDurationByCountry.get(originCode); 
+		 Double callDuration = averageCallDuration==null?actualCallDuration:(averageCallDuration+actualCallDuration);
+		 averageCallDurationByCountry.put(originCode, callDuration);
+	}
 	
 	private void loadCountryCodes(String jsonFile){
 		ObjectMapper mapper = new ObjectMapper();
@@ -526,6 +579,7 @@ public class VasService implements IVasService{
 		counterWrongLines = 0;
 		callsByDestinationCountry = new HashMap<>();
 		callsByOriginCountry = new HashMap<>();
+		averageCallDurationByCountry = new HashMap<>();
 	}
 	
 	private void setupRankingWords(){ 
