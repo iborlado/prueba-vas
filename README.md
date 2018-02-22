@@ -14,7 +14,7 @@ The service has three HTTP endpoints:
   - Only checks content of status_code and message-status for nRowsFieldsErrors counter.
   - Service doesn´t ckeck order of the fields.
   - nRowsFieldsErrors = calls with error + messages with error + message_type <> "CALL" or "MSG" + incorrect json format.
-  - The service is still not calculate number or average call duration by country.
+  - The service calculates number or average call duration by country.
   - e.g. http://localhost:8080/prueba-vas/metrics/20180131
 {
     "nRowsMissingFields": 0,
