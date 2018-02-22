@@ -7,7 +7,8 @@ public class Metrics {
 	private int nRowsMissingFields;
 	private int nMessagesBlankContent;
 	private int nRowsFieldsErrors;
-	private Map<String,Integer> nCallsByCountry;
+	private Map<String,Long> nCallsByOriginCountry;
+	private Map<String,Long> nCallsByDestinationCountry;
 	private Map<String,Integer> relationshipOkKoCalls;
 	private Map<String,Double> averageCallByCountry;
 	private Map<String,Integer> wordOcurrenceRanking;
@@ -40,12 +41,20 @@ public class Metrics {
 		this.nRowsFieldsErrors = nRowsFieldsErrors;
 	}
 
-	public Map<String,Integer> getnCallsByCountry() {
-		return nCallsByCountry;
+	public Map<String, Long> getnCallsByOriginCountry() {
+		return nCallsByOriginCountry;
 	}
 
-	public void setnCallsByCountry(Map<String,Integer> nCallsByCountry) {
-		this.nCallsByCountry = nCallsByCountry;
+	public void setnCallsByOriginCountry(Map<String, Long> nCallsByOriginCountry) {
+		this.nCallsByOriginCountry = nCallsByOriginCountry;
+	}
+
+	public Map<String, Long> getnCallsByDestinationCountry() {
+		return nCallsByDestinationCountry;
+	}
+
+	public void setnCallsByDestinationCountry(Map<String, Long> nCallsByDestinationCountry) {
+		this.nCallsByDestinationCountry = nCallsByDestinationCountry;
 	}
 
 	public Map<String, Integer> getRelationshipOkKoCalls() {
