@@ -20,12 +20,25 @@ The service has three HTTP endpoints:
     "nRowsMissingFields": 0,
     "nMessagesBlankContent": 4,
     "nRowsFieldsErrors": 7,
-    "nCallsByCountry": null,
+    "nCallsByOriginCountry": {
+        "Germany": 6,
+        "Spain": 11,
+        "United Kingdom": 6
+    },
+    "nCallsByDestinationCountry": {
+        "Germany": 6,
+        "Spain": 11,
+        "United Kingdom": 6
+    },
     "relationshipOkKoCalls": {
         "KO": 5,
         "OK": 17
     },
-    "averageCallByCountry": null,
+    "averageCallByCountry": {
+        "Germany": 25,
+        "Spain": 115,
+        "United Kingdom": 10
+    },
     "wordOcurrenceRanking": {
         "HELLO": 12,
         "ARE": 1,
