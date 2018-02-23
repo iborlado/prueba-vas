@@ -5,8 +5,10 @@ import java.io.InputStream;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -101,9 +103,11 @@ public class VasService implements IVasService{
 	private long nRows;
 	private long nCalls;
 	private long nMsgs;
-	private long differentOrigin;
-	private long differentDestination;
+	private Map<String,Long> differentOrigin;
+	private Map<String,Long> differentDestination;
 	private long durationProcess;
+	private Map<String,Long> msgsByOriginCountry;
+	private Map<String,Long> msgsByDestinationCountry;
 	
 	//Country codes
 	private Map<String,String> fourDigitsCountryCodes;
@@ -157,6 +161,7 @@ public class VasService implements IVasService{
 	@Override
 	public Kpis calculateKpis(String dates){
 		initializeKpis();
+		initializeAuxKpis();
 		String [] fileNames = UtilBusiness.extractFileNames(dates);
 		//repeat to all files
 		for (String name: fileNames){
@@ -165,7 +170,8 @@ public class VasService implements IVasService{
 			durationProcess = UtilBusiness.calculateTimeofProcces(startProcess, name);
 			processedFiles.put(prefix_file+name+suffix_file, durationProcess);
 			//save values to assign later to the "kpis" object 
-			auxKpisMap = addKpisToMap(auxKpisMap, name, nRows, nCalls, nMsgs, differentOrigin, differentDestination, durationProcess);
+			//auxKpisMap = addKpisToMap(auxKpisMap, name, nRows, nCalls, nMsgs, differentOrigin, differentDestination, durationProcess);
+			auxKpisMap = addKpisToMap(auxKpisMap, name, nRows, nCalls, nMsgs, durationProcess);
 		}
 		//calculate total and return "kpis" object
 		fillKpiValues(auxKpisMap);
@@ -178,7 +184,7 @@ public class VasService implements IVasService{
 	private String processFile(String date){
 		int wrongLines = 0;
 		initializeCounters();
-		initializeAuxKpis();
+		//initializeAuxKpis();
 		setupRankingWords();
 		loadCountryCodes("/countryCodes.json");
 		
@@ -203,10 +209,13 @@ public class VasService implements IVasService{
 						else if (typeOfMessage.equals(msg)){
 							nMsgs++;
 							checkMsgFields(line);
+							calculateNumberMessagesByCountry(line);
 						}
 						else {
 							wrongLines++;
 						}
+						/*Util.getUnionOfLists(callsByOriginCountry, msgsByOriginCountry);
+						Util.getUnionOfLists(callsByDestinationCountry, msgsByDestinationCountry);*/
 					}
 				}
 				else{
@@ -252,19 +261,22 @@ public class VasService implements IVasService{
 	
 	
 	private void fillKpiValues(Map<String, Map<String,Long>> kpisTotalMap){
-		initializeAuxKpis();
+		//initializeAuxKpis();
 		for(Map<String, Long> kpisFileMap: kpisTotalMap.values()){
 		  nRows += 	kpisFileMap.get(number_rows);
 		  nCalls += kpisFileMap.get(number_calls);
 		  nMsgs += kpisFileMap.get(number_msgs);
-		  differentOrigin += kpisFileMap.get(different_origins);
-		  differentDestination += kpisFileMap.get(different_destinations);
+//		  differentOrigin += kpisFileMap.get(different_origins);
+//		  differentDestination += kpisFileMap.get(different_destinations);
+		  getTotalNumberByCountry();
 		}
 		kpis.setnProcessedFiles(kpisTotalMap.size());
 		kpis.setnRows(nRows);
 		kpis.setnCalls(nCalls);
 		kpis.setnMessages(nMsgs);
+		differentOrigin = Util.sortMapByValueL(differentOrigin);
 		kpis.setnDifferentOrigin(differentOrigin);
+		differentDestination = Util.sortMapByValueL(differentDestination);
 		kpis.setnDifferentDestination(differentDestination);
 		processedFiles  = Util.sortMapByKey(processedFiles);
 		kpis.setDurationJsonProcess(processedFiles);
@@ -446,6 +458,18 @@ public class VasService implements IVasService{
 		return kpisMap;
 	}
 	
+	private Map<String, Map<String,Long>> addKpisToMap (Map<String, Map<String,Long>> kpisMap, String file, long nRows, long nCalls,
+			long nMsgs, long durationProcess){
+		
+		Map <String,Long> values  = new HashMap<>();
+		values.put(number_rows, nRows);
+		values.put(number_calls, nCalls);
+		values.put(number_msgs, nMsgs);
+		values.put(process_duration, durationProcess);
+		kpisMap.put(file, values);
+		
+		return kpisMap;
+	}
 	
 	/**
 	 * Get country code
@@ -540,6 +564,76 @@ public class VasService implements IVasService{
 		 averageCallDurationByCountry.put(originCode, callDuration);
 	}
 	
+	private void calculateNumberMessagesByCountry(String jsonLine){
+		//String originCode = getCountryCode(entry.getValue().asText());
+		String originCode = getCountryName(UtilBusiness.getOriginMsisdn(jsonLine));
+		if (originCode != null){
+			Integer counterMessages = (int) (msgsByOriginCountry.get(originCode)==null?1:(msgsByOriginCountry.get(originCode)+1));
+			msgsByOriginCountry.put(originCode, counterMessages.longValue());
+		}
+		  
+		//String destinationCode = getCountryCode(entry.getValue().asText());
+		String destinationCode = getCountryName(UtilBusiness.getDestinationMsisdn(jsonLine));
+		if (destinationCode != null){
+			Integer counterMessages = (int) (msgsByDestinationCountry.get(destinationCode)==null?1:(msgsByDestinationCountry.get(destinationCode)+1));
+			msgsByDestinationCountry.put(destinationCode, counterMessages.longValue());
+		}
+	}
+	
+	private void getTotalNumberByCountry(){
+		List<String> keysOrigin = null;
+		List<String> keysDestination = null;
+		boolean addMessages = false; 
+		boolean addCalls = false;
+		
+		//origin
+		if ((msgsByOriginCountry != null) && (msgsByOriginCountry.size()>0)){
+			addMessages = true;
+		}
+		if ((callsByOriginCountry != null) && (callsByOriginCountry.size()>0)){
+			addCalls = true;
+			keysOrigin = callsByOriginCountry
+					.entrySet()
+			        .stream()
+			        .map(e -> e.getKey())
+			        .collect(Collectors.toList());
+		}
+		for(String originCode : keysOrigin){
+			Long totalCalls = addCalls?callsByOriginCountry.get(originCode):0;
+			Long totalMsgs = addMessages?msgsByOriginCountry.get(originCode):0;
+			Long totalOrigin = totalCalls+totalMsgs;
+			differentOrigin.put(originCode, totalOrigin);
+			logger.debug("Numero llamadas origen "+originCode+ " = "+totalCalls);
+			logger.debug("Numero mensajes origen "+originCode+ " = "+totalMsgs);
+		}
+			
+		
+		addMessages = false;
+		addCalls = false;
+		
+		//destination
+		if ((msgsByDestinationCountry!= null) && (msgsByDestinationCountry.size()>0)){
+			addMessages = true;
+		}
+		if ((callsByDestinationCountry != null) && (callsByDestinationCountry.size()>0)){
+			addCalls = true;
+			keysDestination = callsByDestinationCountry
+					.entrySet()
+			        .stream()
+			        .map(e -> e.getKey())
+			        .collect(Collectors.toList());
+		}
+		for(String destinationCode : keysDestination){
+			Long totalCalls = addCalls?callsByDestinationCountry.get(destinationCode):0;
+			Long totalMsgs = addMessages?msgsByDestinationCountry.get(destinationCode):0;
+			Long totalDestination = totalCalls+totalMsgs;
+			differentDestination.put(destinationCode, totalDestination);
+			logger.debug("Numero llamadas destino "+destinationCode+ " = "+totalCalls);
+			logger.debug("Numero mensajes destino "+destinationCode+ " = "+totalMsgs);
+		}
+	}
+	
+	
 	private void loadCountryCodes(String jsonFile){
 		ObjectMapper mapper = new ObjectMapper();
 		fourDigitsCountryCodes = new HashMap<>();
@@ -598,8 +692,10 @@ public class VasService implements IVasService{
 		nRows = 0;
 		nCalls = 0;
 		nMsgs = 0;
-		differentOrigin = 0;
-		differentDestination = 0;
+		differentOrigin = new HashMap<>();
+		differentDestination = new HashMap<>();
+		msgsByOriginCountry = new HashMap<>();
+		msgsByDestinationCountry = new HashMap<>();
 		durationProcess = 0;
 	}
 	
