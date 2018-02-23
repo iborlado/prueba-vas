@@ -8,8 +8,8 @@ public class Kpis {
 	private long nRows;
 	private long nCalls;
 	private long nMessages;
-	private long nDifferentOrigin;
-	private long nDifferentDestination;
+	private Map<String,Long> nDifferentOrigin;
+	private Map<String,Long> nDifferentDestination;
 	private Map<String,Long> durationJsonProcess;
 	
 	public Kpis() {
@@ -48,19 +48,19 @@ public class Kpis {
 		this.nMessages = nMessages;
 	}
 
-	public long getnDifferentOrigin() {
+	public Map<String, Long> getnDifferentOrigin() {
 		return nDifferentOrigin;
 	}
 
-	public void setnDifferentOrigin(long nDifferentOrigin) {
+	public void setnDifferentOrigin(Map<String, Long> nDifferentOrigin) {
 		this.nDifferentOrigin = nDifferentOrigin;
 	}
 
-	public long getnDifferentDestination() {
+	public Map<String, Long> getnDifferentDestination() {
 		return nDifferentDestination;
 	}
 
-	public void setnDifferentDestination(long nDifferentDestination) {
+	public void setnDifferentDestination(Map<String, Long> nDifferentDestination) {
 		this.nDifferentDestination = nDifferentDestination;
 	}
 
